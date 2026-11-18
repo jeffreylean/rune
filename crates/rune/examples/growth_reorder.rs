@@ -7,6 +7,9 @@
 //! from the composer into a new row under "Working", and tapping "Working" delivers the oldest
 //! one, which grows and moves above it in the same commit, mid-flight or at rest. A waiting
 //! prompt under another sits closer to it, so the next one's label drops as the first leaves.
+//! `-- nested` puts the virtual list as a row of an outer growth stack, between a header and a
+//! footer, with a bar under the scroll whose "close-list" removes the list while it is read deep
+//! down, so its row folds shut under the footer.
 //!
 //! Headless trace and motion audit (`scripts/motion-audit/run.sh` records both):
 //!   cargo run -p rune --example growth_reorder -- --script scripts/motion-audit/scenarios/growth-reorder.json --trace t.jsonl --trace-all
@@ -16,11 +19,14 @@ struct Chat {
     rows: Vec<(String, f32)>,
     virtualised: bool,
     steer: bool,
+    nested: bool,
+    list_open: bool,
     sent: usize,
 }
 
 fn init() -> Chat {
-    let virtualised = rune::extra_args().iter().any(|a| a == "virtual");
+    let nested = rune::extra_args().iter().any(|a| a == "nested");
+    let virtualised = nested || rune::extra_args().iter().any(|a| a == "virtual");
     let steer = rune::extra_args().iter().any(|a| a == "steer");
     let rows = if virtualised {
         (0..40).map(|i| (format!("v{i}"), if i % 2 == 0 { 36.0 } else { 77.0 })).collect()
@@ -28,7 +34,7 @@ fn init() -> Chat {
         [("m0", 120.0), ("m1", 60.0), ("m2", 90.0), ("bubble-p", 36.0), ("working", 77.0)]
             .map(|(k, h)| (k.to_owned(), h)).into()
     };
-    Chat { rows, virtualised, steer, sent: 0 }
+    Chat { rows, virtualised, steer, nested, list_open: true, sent: 0 }
 }
 
 fn tap(s: &mut Chat, key: &str) {
@@ -74,9 +80,23 @@ fn view(s: &Chat, _: &mut Cx<Chat>) -> El {
     });
     let mut stack = col().key("timeline").w_full().padding(16.0).gap(8.0).growth(GrowthSpec::default());
     if s.virtualised { stack = stack.virtualize(56.0); }
+    let mut content = stack.children(rows);
+    if s.nested {
+        let band = |key: &str, h: f32| col().key(key).w_full().h(h).radius(10.0).padding(10.0).fill(oklch(0.42, 0.06, 250.0))
+            .child(text(key.to_owned()).font(TextStyle::new(13.0, 500.0)).color(Color::WHITE));
+        content = col().key("page").w_full().gap(8.0).growth(GrowthSpec::default())
+            .child(band("header", 48.0))
+            .children(s.list_open.then_some(content))
+            .child(band("footer", 120.0));
+    }
     let page = col().w_full().h_full().fill(oklch(0.2, 0.01, 250.0)).child(
-        col().key("scroll").w_full().grow(1.0).scroll(ScrollSpec { stick_bottom: !s.virtualised }).child(stack.children(rows)),
+        col().key("scroll").w_full().grow(1.0).scroll(ScrollSpec { stick_bottom: !s.virtualised }).child(content),
     );
+    if s.nested {
+        return page.child(col().key("close-list").w_full().h(56.0).padding(16.0).fill(oklch(0.26, 0.01, 250.0))
+            .child(text("close list").font(TextStyle::new(13.0, 500.0)).color(Color::WHITE))
+            .on_press(|s: &mut Chat| s.list_open = false));
+    }
     if !s.steer { return page; }
     page.child(col().key("composer").w_full().h(56.0).padding(16.0).fill(oklch(0.26, 0.01, 250.0))
         .child(text("steer-next").key("draft").font(TextStyle::new(13.0, 500.0)).color(Color::WHITE))

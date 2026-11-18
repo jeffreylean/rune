@@ -51,6 +51,7 @@ run shell-virtual-window-resize 3.0 $SH virtual --script $S/shell-window-resize.
 run tab-strip       9.0 $B/examples/tab_strip --script $S/tab-strip.json
 run growth-reorder    4.2 $GR --script $S/growth-reorder.json
 run growth-reorder-virtual 4.0 $GR virtual --script $S/growth-reorder-virtual.json
+run growth-reorder-nested-fold 8.0 $GR nested --script $S/growth-reorder-nested-fold.json
 run keep-stuck        3.2 $KS --script $S/keep-stuck.json
 run growth-reorder-grow 3.5 $GR steer --script $S/growth-reorder-grow.json
 run growth-reorder-gap 4.7 $GR steer --script $S/growth-reorder-gap.json

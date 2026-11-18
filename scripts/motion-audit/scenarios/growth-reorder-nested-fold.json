@@ -1,0 +1,7 @@
+{
+  "events": [
+    { "t": 0.3, "type": "scroll", "x": 200, "y": 200, "dy": -3000 },
+    { "t": 1.2, "type": "tap", "key": "close-list", "expect": "smooth", "element": "footer" },
+    { "t": 2.8, "type": "move", "x": 10, "y": 10 }
+  ]
+}
