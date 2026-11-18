@@ -14,11 +14,15 @@ impl<S: 'static> Runtime<S> {
         self.row_mask.resize(n_nodes, -1.0);
         self.row_lifts.clear();
         let mut emptied = Vec::new();
-        for (cid, stack) in &self.stacks {
-            let Some(&ci) = self.node_index.get(cid) else { continue };
+        // In tree order, not the stack table's: a stack that is a row of another stack is placed
+        // after the stack around it, and its rows' contents slide after every stack is placed,
+        // so no write lands on a value a later one replaces.
+        for ci in 0..n_nodes {
             let Some(spec) = self.nodes[ci].growth.as_deref().copied() else { continue };
+            let Some(stack) = self.stacks.get(&self.nodes[ci].id) else { continue };
             let origin = self.virtuals.get(&self.nodes[ci].path).map_or(0.0, |v| v.before);
-            self.row_dy[ci] = grid(origin, s);
+            let shift = grid(origin, s);
+            self.row_dy[ci] += shift;
             let mut y = stack.pad_top - origin;
             let mut first_row = true;
             for id in &stack.order {
@@ -49,8 +53,15 @@ impl<S: 'static> Runtime<S> {
                 }
                 y = cur + g.h;
             }
-            // The stack itself presents the rows' heights, which scrolling follows.
-            self.row_h[ci] = y + stack.pad_bottom;
+            // A stack presents its rows' heights, which scrolling follows, unless it is itself a
+            // row: then the stack around it placed it above, and it keeps the slot its track
+            // leaves it there, which the rows after it follow.
+            let slot = self.row_h[ci];
+            self.row_h[ci] = if slot >= 0.0 { slot - shift } else { y + stack.pad_bottom };
+        }
+        for ci in 0..n_nodes {
+            if self.nodes[ci].growth.is_none() { continue }
+            let Some(stack) = self.stacks.get(&self.nodes[ci].id) else { continue };
             for (id, dy) in stack.slides.shifts() {
                 if let Some(&i) = self.node_index.get(&id) { self.row_dy[i] += dy; }
             }
@@ -88,3 +99,7 @@ impl<S: 'static> Runtime<S> {
         (ri + 1..self.nodes.len()).any(|i| inside(i) && self.is_exiting(self.nodes[i].id))
     }
 }
+
+#[cfg(test)]
+#[path = "growth_rows_tests.rs"]
+mod tests;
